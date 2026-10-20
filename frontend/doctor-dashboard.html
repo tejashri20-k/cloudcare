@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Dashboard - CloudCare</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">CloudCare Doctor Portal</div>
+    <div class="nav-links">
+      <span id="doctorNameDisplay"></span>
+      <button onclick="handleLogout()" class="btn btn-secondary">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container" style="padding: 2rem 1rem;">
+    <!-- Welcome Header -->
+    <div style="margin-bottom: 2rem;">
+      <h2 style="margin-bottom: 0.25rem;">Doctor Consultation Dashboard</h2>
+      <p style="color: #64748b; margin-top: 0;">Review your assigned patients, consultation schedules, and clinical notes.</p>
+    </div>
+
+    <!-- 1. Dynamic Metric Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Total Scheduled Patients</span>
+        <h3 id="statTotalPatients" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Upcoming Consultations</span>
+        <h3 id="statUpcomingConsultations" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Assigned Specialty</span>
+        <h3 id="statSpecialty" style="font-size: 1.3rem; margin: 0.5rem 0 0 0; color: #2563eb;">-</h3>
+      </div>
+    </div>
+
+    <!-- 2. Appointment Schedule Table -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h3 style="margin: 0;">Patient Appointments & Consultations</h3>
+        <button onclick="loadDoctorSchedule()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;">Refresh List</button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e2e8f0; color: #475569;">
+              <th style="padding: 10px 8px;">Date</th>
+              <th style="padding: 10px 8px;">Time Slot</th>
+              <th style="padding: 10px 8px;">Patient Name</th>
+              <th style="padding: 10px 8px;">Contact</th>
+              <th style="padding: 10px 8px;">Symptoms & Clinical Notes</th>
+              <th style="padding: 10px 8px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="doctorAppointmentsTable">
+            <!-- Dynamic Rows Injected Here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const API_BASE = window.APP_CONFIG.API_BASE;
+
+    // 1. Session Authentication & Development Fallback (Seeded Dr. Arvind Swaminathan)
+       // 1. Session Authentication
+    // Only logged-in doctors may view this page
+    let currentDoctor = null;
+    try {
+      currentDoctor = JSON.parse(localStorage.getItem('user'));
+    } catch (e) {
+      currentDoctor = null;
+    }
+
+    if (!currentDoctor || !currentDoctor.id || currentDoctor.role !== 'Doctor') {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      document.documentElement.style.display = 'none';
+      window.location.replace('login.html');
+      throw new Error('Not logged in - redirecting to login');
+    }
+
+    const doctorNameDisplay = document.getElementById('doctorNameDisplay');
+    if (doctorNameDisplay) {
+      doctorNameDisplay.textContent = 'Welcome, ' + (currentDoctor.fullName || currentDoctor.email);
+    }
+
+    const statSpecialty = document.getElementById('statSpecialty');
+    if (statSpecialty && currentDoctor.specialty) {
+      statSpecialty.textContent = currentDoctor.specialty;
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+
+    // 2. Fetch Appointments from Database
+    async function loadDoctorSchedule() {
+      const tableBody = document.getElementById('doctorAppointmentsTable');
+      const statTotal = document.getElementById('statTotalPatients');
+      const statUpcoming = document.getElementById('statUpcomingConsultations');
+
+      tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 2rem;">Loading appointments from database...</td></tr>';
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${currentDoctor.id}?role=Doctor`);
+        const appointments = await res.json();
+
+        tableBody.innerHTML = '';
+
+        if (!appointments || appointments.length === 0) {
+          tableBody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align: center; color: #94a3b8; padding: 2.5rem; background: #f8fafc;">
+                No patient consultations scheduled at this time.
+              </td>
+            </tr>
+          `;
+        if (statTotal) statTotal.textContent = appointments.filter(a => a.status !== 'Cancelled').length;
+        if (statUpcoming) statUpcoming.textContent = appointments.filter(isActive).length;
+          return;
+        }
+
+        if (statTotal) statTotal.textContent = appointments.length;
+        if (statUpcoming) statUpcoming.textContent = appointments.length;
+
+          appointments.forEach(app => {
+          const row = document.createElement('tr');
+          row.style.borderBottom = '1px solid #e2e8f0';
+          row.innerHTML = `
+            <td style="padding: 12px 8px; font-weight: 500;">${app.appointment_date}</td>
+            <td style="padding: 12px 8px; color: #2563eb;">${app.time_slot}</td>
+            <td style="padding: 12px 8px; font-weight: 500; color: #1e293b;">${app.patientName}</td>
+            <td style="padding: 12px 8px; color: #64748b;">${app.patientPhone}</td>
+            <td style="padding: 12px 8px; color: #334155; max-width: 280px;">${app.symptoms_notes || 'Routine follow-up'}</td>
+            <td style="padding: 12px 8px;">
+              ${statusBadge(app.status)}
+              ${isActive(app) ? `
+                <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button onclick="changeStatus('${app.id}', 'Completed')" class="btn btn-primary" style="padding: 5px 9px; font-size: 0.78rem; border-radius: 4px; cursor: pointer;">Complete Visit</button>
+                  <button onclick="changeStatus('${app.id}', 'Cancelled')" class="btn btn-secondary" style="padding: 5px 9px; font-size: 0.78rem; border-radius: 4px; cursor: pointer;">Cancel</button>
+                </div>` : ''}
+            </td>
+          `;
+          tableBody.appendChild(row);
+        });
+      } catch (err) {
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 1.5rem;">Failed to communicate with database server.</td></tr>';
+      }
+    }
+
+        function statusBadge(status) {
+      const s = status || 'Scheduled';
+      const colors = {
+        Scheduled: ['#dbeafe', '#1e40af'],
+        Completed: ['#dcfce7', '#166534'],
+        Cancelled: ['#fee2e2', '#b91c1c']
+      };
+      const [bg, fg] = colors[s] || ['#e2e8f0', '#334155'];
+      return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:0.8rem; padding:2px 8px; border-radius:4px; font-weight:500;">${s}</span>`;
+    }
+
+    function isActive(app) {
+      return app.status !== 'Completed' && app.status !== 'Cancelled';
+    }
+
+    async function changeStatus(appointmentId, status) {
+      const verb = status === 'Completed' ? 'mark this visit as completed' : 'cancel this appointment';
+      if (!confirm(`Are you sure you want to ${verb}?`)) return;
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${appointmentId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, userId: currentDoctor.id, role: 'Doctor' })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || 'Could not update the appointment.');
+          return;
+        }
+        await loadDoctorSchedule();
+      } catch (err) {
+        alert('Could not reach the server.');
+      }
+    }
+
+    // Load schedule on page load
+    document.addEventListener('DOMContentLoaded', loadDoctorSchedule);
+  </script>
+</body>
+</html>

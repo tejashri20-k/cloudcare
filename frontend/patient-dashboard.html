@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patient Dashboard - CloudCare</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">CloudCare Aggregator</div>
+    <div class="nav-links">
+      <span id="userNameDisplay">Loading...</span>
+      <button onclick="handleLogout()" class="btn btn-secondary">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container" style="padding: 2rem 1rem;">
+    <!-- Welcome Header -->
+    <div style="margin-bottom: 2rem;">
+      <h2 style="margin-bottom: 0.25rem;">Patient Dashboard</h2>
+      <p style="color: #64748b; margin-top: 0;">Manage your appointments, discover clinics, and view diagnostic records.</p>
+    </div>
+
+    <!-- 1. Stats Counter (Dynamic) -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Upcoming Appointments</span>
+        <h3 id="statUpcomingAppointments" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Medical Records Available</span>
+        <h3 id="statMedicalRecords" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Connected Clinics</span>
+        <h3 id="statConnectedClinics" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+    </div>
+
+    <!-- 2. Search & Filter Clinics Section -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+      <h3 style="margin-top: 0;">Search Clinics & Doctors</h3>
+      <p style="color: #64748b; margin-bottom: 1rem;">Filter across registered facilities and medical specialties</p>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div>
+          <label for="citySelect" style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Select City</label>
+          <select id="citySelect" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option value="All">All Cities</option>
+          </select>
+        </div>
+        <div>
+          <label for="serviceSelect" style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Select Medical Service</label>
+          <select id="serviceSelect" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option value="All">All Services</option>
+          </select>
+        </div>
+      </div>
+
+      <h4 style="margin-bottom: 1rem; color: #334155;">Available Clinics</h4>
+      <div id="clinicsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+        <!-- Dynamic Clinic Cards -->
+      </div>
+    </div>
+
+    <!-- 3. Your Appointments List -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+      <h3 style="margin-top: 0;">Your Scheduled Appointments</h3>
+      <div id="appointmentsContainer">
+        <!-- Dynamic Appointments -->
+      </div>
+    </div>
+
+    <!-- 4. Medical Records Table -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Diagnostic & Medical Records</h3>
+      </div>
+      <div id="recordsContainer" style="overflow-x: auto;">
+        <!-- Dynamic Records Table -->
+      </div>
+    </div>
+  </div>
+
+    <!-- Booking Modal -->
+  <div id="bookingModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem;">
+    <div style="background:#fff; border-radius:10px; padding:1.5rem; width:100%; max-width:440px; max-height:90vh; overflow-y:auto;">
+      <h3 id="bookingTitle" style="margin-top:0;">Book Appointment</h3>
+
+      <div id="bookingMsg" style="display:none; border-radius:6px; padding:0.7rem; margin-bottom:1rem; font-size:0.9rem;"></div>
+
+      <label style="display:block; font-weight:500; margin-bottom:0.4rem;">Doctor</label>
+      <select id="bookDoctor" style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:1rem;"></select>
+
+      <label style="display:block; font-weight:500; margin-bottom:0.4rem;">Date</label>
+      <input type="date" id="bookDate" style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:1rem; box-sizing:border-box;">
+
+      <label style="display:block; font-weight:500; margin-bottom:0.4rem;">Time Slot</label>
+      <select id="bookSlot" style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:1rem;"></select>
+
+      <label style="display:block; font-weight:500; margin-bottom:0.4rem;">Symptoms / Notes</label>
+      <textarea id="bookNotes" rows="3" placeholder="Briefly describe your concern" style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:1rem; box-sizing:border-box;"></textarea>
+
+      <div style="display:flex; gap:0.75rem; justify-content:flex-end;">
+        <button type="button" onclick="closeBooking()" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="confirmBookBtn" onclick="confirmBooking()" class="btn btn-primary">Confirm Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const API_BASE = 'http://localhost:5000/api';
+
+    // 1. Session Authentication & Display Verification
+        // 1. Session Authentication
+    // Only logged-in patients may view this page
+    let currentUser = null;
+    try {
+      currentUser = JSON.parse(localStorage.getItem('user'));
+    } catch (e) {
+      currentUser = null;
+    }
+
+    if (!currentUser || !currentUser.id || currentUser.role !== 'Patient') {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      document.documentElement.style.display = 'none';
+      window.location.replace('login.html');
+      throw new Error('Not logged in - redirecting to login');
+    }
+
+    const userNameDisplay = document.getElementById('userNameDisplay');
+    if (userNameDisplay) {
+      userNameDisplay.textContent = 'Welcome, ' + (currentUser.fullName || currentUser.email);
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+
+    // 2. Fetch and Render Clinics (with Dynamic Filters)
+    const citySelect = document.getElementById('citySelect');
+    const serviceSelect = document.getElementById('serviceSelect');
+    const clinicsContainer = document.getElementById('clinicsContainer');
+    const statConnectedClinics = document.getElementById('statConnectedClinics');
+
+    async function loadClinics() {
+      const selectedCity = citySelect ? citySelect.value : 'All';
+      const selectedService = serviceSelect ? serviceSelect.value : 'All';
+
+      clinicsContainer.innerHTML = '<p style="color: #64748b; grid-column: 1 / -1;">Loading clinics from database...</p>';
+
+      try {
+        const params = new URLSearchParams();
+        if (selectedCity !== 'All') params.append('city', selectedCity);
+        if (selectedService !== 'All') params.append('service', selectedService);
+
+        const res = await authFetch(`${API_BASE}/clinics?${params.toString()}`);
+        const clinics = await res.json();
+
+        clinicsContainer.innerHTML = '';
+
+        if (!clinics || clinics.length === 0) {
+          clinicsContainer.innerHTML = `
+            <div style="grid-column: 1 / -1; padding: 2rem; text-align: center; color: #94a3b8; background: #f8fafc; border-radius: 6px;">
+              No clinics found matching the selected city or service criteria.
+            </div>
+          `;
+          return;
+        }
+
+        clinics.forEach(clinic => {
+          const card = document.createElement('div');
+          card.style.cssText = 'border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; background: #fafafa;';
+          card.innerHTML = `
+            <div style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; display: inline-block; font-size: 12px; margin-bottom: 8px; font-weight: 500;">
+              ${clinic.city || 'Location N/A'}
+            </div>
+            <h4 style="margin: 0 0 6px 0; font-size: 1.1rem; color: #1e293b;">${clinic.name}</h4>
+            <p style="margin: 0 0 6px 0; color: #64748b; font-size: 0.9rem;">${clinic.address || 'Address on file'}</p>
+            <p style="margin: 0 0 6px 0; font-size: 0.88rem; color: #334155;">
+              <strong>Services:</strong> ${Array.isArray(clinic.services) && clinic.services.length > 0 ? clinic.services.join(', ') : 'General Consultation'}
+            </p>
+            <p style="margin: 0 0 12px 0; font-size: 0.88rem; color: #334155;">
+              <strong>Doctors Available:</strong> ${clinic.doctorsAvailable || 0}
+            </p>
+            <button onclick="bookClinic('${clinic.id}', '${clinic.name}')" class="btn btn-primary" style="width: 100%; padding: 8px; border-radius: 6px; font-size: 0.9rem; cursor: pointer;">
+              Book Appointment
+            </button>
+          `;
+          clinicsContainer.appendChild(card);
+        });
+      } catch (err) {
+        clinicsContainer.innerHTML = '<p style="color: #ef4444; grid-column: 1 / -1;">Failed to communicate with database server.</p>';
+      }
+    }
+
+    // Populate filter options dynamically from all records
+    async function populateFilters() {
+      try {
+        const res = await authFetch(`${API_BASE}/clinics`);
+        const allClinics = await res.json();
+
+        if (statConnectedClinics) {
+          statConnectedClinics.textContent = allClinics.length || 0;
+        }
+
+        const cities = [...new Set(allClinics.map(c => c.city))].filter(Boolean);
+        const services = [...new Set(allClinics.flatMap(c => c.services))].filter(Boolean);
+
+        citySelect.innerHTML = '<option value="All">All Cities</option>';
+        cities.forEach(city => {
+          const opt = document.createElement('option');
+          opt.value = city;
+          opt.textContent = city;
+          citySelect.appendChild(opt);
+        });
+
+        serviceSelect.innerHTML = '<option value="All">All Services</option>';
+        services.forEach(srv => {
+          const opt = document.createElement('option');
+          opt.value = srv;
+          opt.textContent = srv;
+          serviceSelect.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Filter options load error:', err);
+      }
+    }
+
+        function statusBadge(status) {
+      const s = status || 'Scheduled';
+      const colors = {
+        Scheduled: ['#dbeafe', '#1e40af'],
+        Completed: ['#dcfce7', '#166534'],
+        Cancelled: ['#fee2e2', '#b91c1c']
+      };
+      const [bg, fg] = colors[s] || ['#e2e8f0', '#334155'];
+      return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:0.8rem; padding:2px 8px; border-radius:4px; font-weight:500;">${s}</span>`;
+    }
+
+    function isActive(app) {
+      return app.status !== 'Completed' && app.status !== 'Cancelled';
+    }
+
+    async function cancelAppointment(appointmentId) {
+      if (!confirm('Are you sure you want to cancel this appointment?')) return;
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${appointmentId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Cancelled', userId: currentUser.id, role: 'Patient' })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || 'Could not cancel the appointment.');
+          return;
+        }
+        await loadAppointments();
+      } catch (err) {
+        alert('Could not reach the server.');
+      }
+    }
+
+    // 3. Fetch Patient's Actual Appointments
+    async function loadAppointments() {
+      const container = document.getElementById('appointmentsContainer');
+      const statAppointments = document.getElementById('statUpcomingAppointments');
+      container.innerHTML = '<p style="color: #64748b;">Loading appointments...</p>';
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${currentUser.id}?role=Patient`);
+        const appointments = await res.json();
+
+        if (statAppointments) {
+          statAppointments.textContent = appointments.filter(isActive).length;
+        }
+
+        container.innerHTML = '';
+
+        if (!appointments || appointments.length === 0) {
+          container.innerHTML = `
+            <div style="padding: 1.5rem; text-align: center; color: #94a3b8; background: #f8fafc; border-radius: 6px;">
+              No appointments scheduled yet. Select an available clinic above to make a booking.
+            </div>
+          `;
+          return;
+        }
+
+          appointments.forEach(app => {
+          const item = document.createElement('div');
+          const borderColor = app.status === 'Cancelled' ? '#ef4444' : app.status === 'Completed' ? '#16a34a' : '#2563eb';
+          item.style.cssText = `border-left: 4px solid ${borderColor}; background: #f8fafc; padding: 1rem; border-radius: 4px; margin-bottom: 0.75rem;`;
+          item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 0.5rem;">
+              <div>
+                <h4 style="margin: 0; color: #1e293b;">${app.clinicName}</h4>
+                <p style="margin: 3px 0; color: #475569; font-size: 0.9rem;">
+                  Doctor: <strong>${app.doctorName}</strong> (${app.doctorSpecialty})
+                </p>
+                <p style="margin: 3px 0; color: #64748b; font-size: 0.85rem;">
+                  Notes: ${app.symptoms_notes || 'Routine checkup'}
+                </p>
+              </div>
+              <div style="text-align: right;">
+                ${statusBadge(app.status)}
+                <div style="font-size: 0.9rem; color: #1e293b; margin-top: 6px; font-weight: 500;">${app.appointment_date}</div>
+                <div style="font-size: 0.85rem; color: #64748b;">${app.time_slot}</div>
+                ${isActive(app) ? `<button onclick="cancelAppointment('${app.id}')" style="margin-top: 8px; padding: 4px 10px; font-size: 0.8rem; border: 1px solid #fca5a5; color: #b91c1c; background: #fff; border-radius: 4px; cursor: pointer;">Cancel</button>` : ''}
+              </div>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      } catch (err) {
+        container.innerHTML = '<p style="color: #ef4444;">Could not load appointments from database.</p>';
+      }
+    }
+
+    // 4. Fetch Patient's Medical Records
+    async function loadRecords() {
+      const container = document.getElementById('recordsContainer');
+      const statRecords = document.getElementById('statMedicalRecords');
+      container.innerHTML = '<p style="color: #64748b;">Loading records...</p>';
+
+      try {
+        const res = await authFetch(`${API_BASE}/records/${currentUser.id}`);
+        const records = await res.json();
+
+        if (statRecords) {
+          statRecords.textContent = (records && Array.isArray(records)) ? records.length : 0;
+        }
+
+        if (!records || records.length === 0) {
+          container.innerHTML = `
+            <div style="padding: 1.5rem; text-align: center; color: #94a3b8; background: #f8fafc; border-radius: 6px;">
+              No medical records or diagnostic reports on file.
+            </div>
+          `;
+          return;
+        }
+
+        let tableHtml = `
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid #e2e8f0; color: #475569;">
+                <th style="padding: 8px;">Document Type</th>
+                <th style="padding: 8px;">File Name</th>
+                <th style="padding: 8px;">Uploaded By</th>
+                <th style="padding: 8px;">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        records.forEach(rec => {
+          tableHtml += `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 8px;"><strong>${rec.document_type || 'General'}</strong></td>
+              <td style="padding: 10px 8px;">${rec.file_name}</td>
+              <td style="padding: 10px 8px;">${rec.uploaded_by || 'Staff'}</td>
+              <td style="padding: 10px 8px; color: #64748b;">${rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'N/A'}</td>
+            </tr>
+          `;
+        });
+
+        tableHtml += '</tbody></table>';
+        container.innerHTML = tableHtml;
+      } catch (err) {
+        container.innerHTML = '<p style="color: #ef4444;">Could not load records from database.</p>';
+      }
+    }
+
+        // ---------- BOOKING FLOW ----------
+    const ALL_SLOTS = ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
+                       '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'];
+    let bookingClinicId = null;
+
+    function showBookingMsg(text, isError = true) {
+      const box = document.getElementById('bookingMsg');
+      box.textContent = text;
+      box.style.display = 'block';
+      box.style.background = isError ? '#fee2e2' : '#dcfce7';
+      box.style.color = isError ? '#b91c1c' : '#166534';
+    }
+
+    function closeBooking() {
+      document.getElementById('bookingModal').style.display = 'none';
+    }
+
+    async function bookClinic(clinicId, clinicName) {
+      bookingClinicId = clinicId;
+      document.getElementById('bookingTitle').textContent = 'Book at ' + clinicName;
+      document.getElementById('bookingMsg').style.display = 'none';
+      document.getElementById('bookNotes').value = '';
+
+      // Date defaults to today and cannot be in the past
+      const now = new Date();
+      const todayStr = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+      const dateInput = document.getElementById('bookDate');
+      dateInput.min = todayStr;
+      dateInput.value = todayStr;
+
+      const doctorSelect = document.getElementById('bookDoctor');
+      doctorSelect.innerHTML = '<option value="">Loading doctors...</option>';
+      document.getElementById('bookingModal').style.display = 'flex';
+
+      try {
+        const res = await authFetch(`${API_BASE}/clinics/${clinicId}/doctors`);
+        const doctors = await res.json();
+
+        if (!doctors || doctors.length === 0) {
+          doctorSelect.innerHTML = '<option value="">No doctors available</option>';
+        } else {
+          doctorSelect.innerHTML = doctors
+            .map(d => `<option value="${d.id}">${d.name} (${d.specialty || 'General'})</option>`)
+            .join('');
+        }
+      } catch (err) {
+        doctorSelect.innerHTML = '<option value="">Could not load doctors</option>';
+      }
+
+      await refreshSlots();
+    }
+
+    // Grey out slots already booked for the chosen doctor and date
+    async function refreshSlots() {
+      const doctorId = document.getElementById('bookDoctor').value;
+      const date = document.getElementById('bookDate').value;
+      const slotSelect = document.getElementById('bookSlot');
+
+      let booked = [];
+      if (doctorId && date) {
+        try {
+          const res = await authFetch(`${API_BASE}/doctors/${doctorId}/booked-slots?date=${date}`);
+          const data = await res.json();
+          if (Array.isArray(data)) booked = data;
+        } catch (err) {
+          console.error('Could not load booked slots:', err);
+        }
+      }
+
+      slotSelect.innerHTML = ALL_SLOTS
+        .map(s => booked.includes(s)
+          ? `<option value="${s}" disabled>${s} (booked)</option>`
+          : `<option value="${s}">${s}</option>`)
+        .join('');
+
+      const firstFree = ALL_SLOTS.find(s => !booked.includes(s));
+      slotSelect.value = firstFree || '';
+    }
+
+    async function confirmBooking() {
+      const doctorId = document.getElementById('bookDoctor').value;
+      const date = document.getElementById('bookDate').value;
+      const timeSlot = document.getElementById('bookSlot').value;
+      const notes = document.getElementById('bookNotes').value.trim();
+
+      if (!doctorId) return showBookingMsg('Please choose a doctor.');
+      if (!date) return showBookingMsg('Please choose a date.');
+      if (!timeSlot) return showBookingMsg('No time slots are free on this date. Try another date.');
+
+      const btn = document.getElementById('confirmBookBtn');
+      btn.disabled = true;
+      btn.textContent = 'Booking...';
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientId: currentUser.id,
+            doctorId,
+            clinicId: bookingClinicId,
+            date,
+            timeSlot,
+            notes
+          })
+        });
+        const result = await res.json();
+
+        if (!res.ok) {
+          showBookingMsg(result.error || 'Booking failed. Please try again.');
+          await refreshSlots();
+          return;
+        }
+
+        showBookingMsg('Appointment booked successfully!', false);
+        await loadAppointments();
+        setTimeout(closeBooking, 1200);
+      } catch (err) {
+        showBookingMsg('Could not reach the server. Is the backend running?');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm Booking';
+      }
+    }
+
+    document.getElementById('bookDoctor').addEventListener('change', refreshSlots);
+    document.getElementById('bookDate').addEventListener('change', refreshSlots);
+
+    // Event Listeners for Filters
+    citySelect.addEventListener('change', loadClinics);
+    serviceSelect.addEventListener('change', loadClinics);
+
+    // Initial Execution
+    document.addEventListener('DOMContentLoaded', async () => {
+      await populateFilters();
+      await loadClinics();
+      await loadAppointments();
+      await loadRecords();
+    });
+  </script>
+</body>
+</html>

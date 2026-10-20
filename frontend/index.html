@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CloudCare - Find & Book Clinics</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="logo">CloudCare Aggregator</a>
+    <div class="nav-links">
+      <a href="login.html">Login</a>
+      <a href="register.html" class="btn btn-sm">Sign Up</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="card" style="margin-bottom: 2rem;">
+      <h2>Search Clinics & Doctors</h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">Filter across multiple cities and specialties</p>
+      
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 200px;">
+          <label>Select City</label>
+          <select id="citySelect">
+            <option value="all">All Cities</option>
+            <option value="chennai">Chennai</option>
+            <option value="bengaluru">Bengaluru</option>
+            <option value="delhi">Delhi</option>
+            <option value="mumbai">Mumbai</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="flex: 1; min-width: 200px;">
+          <label>Select Medical Service</label>
+          <select id="serviceSelect">
+            <option value="all">All Services</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="dental">Dental</option>
+            <option value="dermatology">Dermatology</option>
+            <option value="pediatrics">Pediatrics</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <h3>Available Clinics</h3>
+    <div class="grid" id="clinicsContainer" style="margin-top: 1rem;">
+      <div class="card">
+        <span class="badge">Chennai</span>
+        <h3>Apollo Specialty Clinic</h3>
+        <p style="color: var(--text-muted);">Greams Road, Thousand Lights</p>
+        <p><strong>Services:</strong> Cardiology, Dental</p>
+        <p><strong>Doctors Available:</strong> 4</p>
+        <br>
+        <a href="patient-dashboard.html" class="btn btn-sm">View Doctors & Book</a>
+      </div>
+
+      <div class="card">
+        <span class="badge">Bengaluru</span>
+        <h3>Manipal Care Center</h3>
+        <p style="color: var(--text-muted);">Old Airport Road, Indiranagar</p>
+        <p><strong>Services:</strong> Dermatology, Pediatrics</p>
+        <p><strong>Doctors Available:</strong> 6</p>
+        <br>
+        <a href="patient-dashboard.html" class="btn btn-sm">View Doctors & Book</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

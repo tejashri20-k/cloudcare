@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clinic Administrator Dashboard - CloudCare</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">CloudCare Facility Management</div>
+    <div class="nav-links">
+      <span id="clinicNameDisplay"></span>
+      <button onclick="handleLogout()" class="btn btn-secondary">Logout</button>
+    </div>
+  </nav>
+
+  <div class="container" style="padding: 2rem 1rem;">
+    <!-- Welcome Header -->
+    <div style="margin-bottom: 2rem;">
+      <h2 style="margin-bottom: 0.25rem;">Facility Administrator Dashboard</h2>
+      <p id="clinicSubtitle" style="color: #64748b; margin-top: 0;">Managing appointments, operational staff, and doctor rosters.</p>
+    </div>
+
+    <!-- 1. Dynamic Metric Cards -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Total Clinic Bookings</span>
+        <h3 id="statTotalAppointments" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #1e293b;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Staff & Active Doctors</span>
+        <h3 id="statActiveDoctors" style="font-size: 1.8rem; margin: 0.5rem 0 0 0; color: #2563eb;">0</h3>
+      </div>
+      <div class="stat-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem;">
+        <span style="color: #64748b; font-size: 0.9rem;">Facility Location</span>
+        <h3 id="statFacilityCity" style="font-size: 1.4rem; margin: 0.5rem 0 0 0; color: #1e293b;">Chennai</h3>
+      </div>
+    </div>
+
+    <!-- 2. Facility Bookings Table -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+        <h3 style="margin: 0;">Scheduled Patient Bookings</h3>
+        <button onclick="loadClinicData()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;">Refresh</button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e2e8f0; color: #475569;">
+              <th style="padding: 10px 8px;">Date</th>
+              <th style="padding: 10px 8px;">Time Slot</th>
+              <th style="padding: 10px 8px;">Patient Name</th>
+              <th style="padding: 10px 8px;">Patient Contact</th>
+              <th style="padding: 10px 8px;">Assigned Doctor</th>
+              <th style="padding: 10px 8px;">Notes</th>
+              <th style="padding: 10px 8px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="clinicAppointmentsTable">
+            <!-- Dynamic Appointment Rows Injected Here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. Medical Staff Roster -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem;">
+      <h3 style="margin-top: 0; margin-bottom: 1rem;">Medical Staff & Doctors Roster</h3>
+      <div id="doctorsListContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+        <!-- Dynamic Doctor Cards Injected Here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const API_BASE = window.APP_CONFIG.API_BASE;
+
+    // 1. Session Authentication & Development Fallback (Seeded Apollo Administration)
+        // 1. Session Authentication
+    // Only logged-in clinic admins may view this page
+    let currentAdmin = null;
+    try {
+      currentAdmin = JSON.parse(localStorage.getItem('user'));
+    } catch (e) {
+      currentAdmin = null;
+    }
+
+    if (!currentAdmin || !currentAdmin.id || currentAdmin.role !== 'Clinic') {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      document.documentElement.style.display = 'none';
+      window.location.replace('login.html');
+      throw new Error('Not logged in - redirecting to login');
+    }
+
+    const clinicNameDisplay = document.getElementById('clinicNameDisplay');
+    if (clinicNameDisplay) {
+      clinicNameDisplay.textContent = 'Welcome, ' + (currentAdmin.fullName || currentAdmin.email);
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    }
+
+        function statusBadge(status) {
+      const s = status || 'Scheduled';
+      const colors = {
+        Scheduled: ['#dbeafe', '#1e40af'],
+        Completed: ['#dcfce7', '#166534'],
+        Cancelled: ['#fee2e2', '#b91c1c']
+      };
+      const [bg, fg] = colors[s] || ['#e2e8f0', '#334155'];
+      return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:0.8rem; padding:2px 8px; border-radius:4px; font-weight:500;">${s}</span>`;
+    }
+
+    function isActive(app) {
+      return app.status !== 'Completed' && app.status !== 'Cancelled';
+    }
+
+    async function changeStatus(appointmentId, status) {
+      const verb = status === 'Completed' ? 'mark this visit as completed' : 'cancel this booking';
+      if (!confirm(`Are you sure you want to ${verb}?`)) return;
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${appointmentId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, userId: currentAdmin.id, role: 'Clinic' })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || 'Could not update the booking.');
+          return;
+        }
+        await loadClinicData();
+      } catch (err) {
+        alert('Could not reach the server.');
+      }
+    }
+    // 2. Fetch Clinic Details, Doctors, and Bookings
+    async function loadClinicData() {
+      const appointmentsTable = document.getElementById('clinicAppointmentsTable');
+      const doctorsContainer = document.getElementById('doctorsListContainer');
+      const statTotalAppointments = document.getElementById('statTotalAppointments');
+      const statActiveDoctors = document.getElementById('statActiveDoctors');
+      const statFacilityCity = document.getElementById('statFacilityCity');
+      const clinicSubtitle = document.getElementById('clinicSubtitle');
+
+      appointmentsTable.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 2rem;">Loading bookings...</td></tr>';
+      doctorsContainer.innerHTML = '<p style="color: #64748b;">Loading doctor roster...</p>';
+
+      try {
+        // A. Load Clinic & Doctors info
+        const detailsRes = await authFetch(`${API_BASE}/clinics/${currentAdmin.id}/details`);
+        if (detailsRes.ok) {
+          const details = await detailsRes.json();
+          if (details.clinic) {
+            clinicNameDisplay.textContent = 'Welcome, ' + details.clinic.name;
+            statFacilityCity.textContent = details.clinic.city || 'N/A';
+            clinicSubtitle.textContent = `${details.clinic.address || 'Medical Center'} • Facility Administration`;
+          }
+
+          // Render Doctor Staff
+          doctorsContainer.innerHTML = '';
+          const doctors = details.doctors || [];
+          statActiveDoctors.textContent = doctors.length;
+
+          if (doctors.length === 0) {
+            doctorsContainer.innerHTML = '<p style="color: #94a3b8;">No medical doctors currently registered.</p>';
+          } else {
+            doctors.forEach(doc => {
+              const card = document.createElement('div');
+              card.style.cssText = 'border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; background: #f8fafc;';
+              card.innerHTML = `
+                <div style="font-weight: 600; font-size: 1rem; color: #1e293b;">${doc.name}</div>
+                <div style="color: #2563eb; font-size: 0.85rem; font-weight: 500; margin: 2px 0 6px 0;">${doc.specialty}</div>
+                <div style="font-size: 0.8rem; color: #64748b;">Status: <span style="color:#16a34a; font-weight:500;">Active Duty</span></div>
+              `;
+              doctorsContainer.appendChild(card);
+            });
+          }
+        }
+
+        // B. Load Scheduled Appointments
+        const appRes = await authFetch(`${API_BASE}/appointments/${currentAdmin.id}?role=Clinic`);
+        const appointments = await appRes.json();
+
+        appointmentsTable.innerHTML = '';
+
+        if (!appointments || appointments.length === 0) {
+          appointmentsTable.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align: center; color: #94a3b8; padding: 2.5rem; background: #f8fafc;">
+                No patient bookings scheduled at this facility.
+              </td>
+            </tr>
+          `;
+          statTotalAppointments.textContent = '0';
+          return;
+        }
+
+        statTotalAppointments.textContent = appointments.length;
+
+        appointments.forEach(app => {
+          const row = document.createElement('tr');
+          row.style.borderBottom = '1px solid #e2e8f0';
+          row.innerHTML = `
+            <td style="padding: 12px 8px; font-weight: 500;">${app.appointment_date}</td>
+            <td style="padding: 12px 8px; color: #2563eb;">${app.time_slot}</td>
+            <td style="padding: 12px 8px; font-weight: 500; color: #1e293b;">${app.patientName}</td>
+            <td style="padding: 12px 8px; color: #64748b;">${app.patientPhone}</td>
+            <td style="padding: 12px 8px; color: #334155;"><strong>${app.doctorName}</strong> (${app.doctorSpecialty})</td>
+            <td style="padding: 12px 8px; color: #64748b; font-size: 0.85rem; max-width: 260px;">${app.symptoms_notes || 'General consultation'}</td>
+            <td style="padding: 12px 8px;">
+              ${statusBadge(app.status)}
+              ${isActive(app) ? `
+                <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button onclick="changeStatus('${app.id}', 'Completed')" class="btn btn-primary" style="padding: 5px 9px; font-size: 0.78rem; border-radius: 4px; cursor: pointer;">Complete</button>
+                  <button onclick="changeStatus('${app.id}', 'Cancelled')" class="btn btn-secondary" style="padding: 5px 9px; font-size: 0.78rem; border-radius: 4px; cursor: pointer;">Cancel</button>
+                </div>` : ''}
+            </td>
+          `;
+          appointmentsTable.appendChild(row);
+        });
+
+      } catch (err) {
+        appointmentsTable.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 1.5rem;">Failed to load data from database server.</td></tr>';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadClinicData);
+  </script>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register - CloudCare</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="logo">CloudCare Aggregator</a>
+    <div class="nav-links">
+      <a href="login.html">Login</a>
+    </div>
+  </nav>
+
+  <div class="auth-card">
+    <h2>Create Account</h2>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Join CloudCare healthcare platform</p>
+
+    <form id="registerForm">
+      <div class="form-group">
+        <label for="regRole">Register As</label>
+        <select id="regRole" required>
+          <option value="Patient">Patient</option>
+          <option value="Doctor">Doctor</option>
+          <option value="Clinic">Clinic</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="regName">Full Name / Clinic Name</label>
+        <input type="text" id="regName" placeholder="Enter full name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="regEmail">Email Address</label>
+        <input type="email" id="regEmail" placeholder="Enter email address" required>
+      </div>
+
+      <div class="form-group">
+        <label for="regPassword">Password</label>
+        <input type="password" id="regPassword" placeholder="Enter password (min 6 characters)" required>
+      </div>
+
+      <div class="form-group">
+        <label for="regPhone">Phone Number</label>
+        <input type="tel" id="regPhone" placeholder="Enter phone number" required>
+      </div>
+
+      <div class="form-group">
+        <label for="regDob">Date of Birth</label>
+        <input type="date" id="regDob">
+      </div>
+
+      <div class="form-group">
+        <label for="regGender">Gender</label>
+        <select id="regGender">
+          <option value="">Select Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="regCity">City</label>
+        <input type="text" id="regCity" placeholder="e.g., Chennai" required>
+      </div>
+
+      <div class="form-group">
+        <label for="regAddress">Address</label>
+        <textarea id="regAddress" rows="2" placeholder="Enter full address"></textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Create Account</button>
+    </form>
+
+    <p style="font-size: 0.85rem; text-align: center; margin-top: 1.25rem;">
+      Already registered? <a href="login.html">Sign In</a>
+    </p>
+  </div>
+  <script src="config.js"></script>
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const userData = {
+        fullName: document.getElementById('regName').value.trim(),
+        email: document.getElementById('regEmail').value.trim(),
+        password: document.getElementById('regPassword').value,
+        phone: document.getElementById('regPhone').value.trim(),
+        dateOfBirth: document.getElementById('regDob').value || null,
+        gender: document.getElementById('regGender').value || null,
+        city: document.getElementById('regCity').value.trim(),
+        address: document.getElementById('regAddress').value.trim() || null,
+        role: document.getElementById('regRole').value
+      };
+
+      try {
+        const response = await fetch(`${window.APP_CONFIG.API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert('Account created successfully! Please sign in.');
+          window.location.href = 'login.html';
+        } else {
+          alert('Error: ' + (result.error || 'Registration failed.'));
+        }
+      } catch (error) {
+        alert('Could not reach backend server. Make sure node server.js is running.');
+      }
+    });
+  </script>
+</body>
+</html>
