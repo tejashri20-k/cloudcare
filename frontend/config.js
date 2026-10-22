@@ -6,5 +6,5 @@ const isLocal = ['localhost', '127.0.0.1', ''].includes(window.location.hostname
 window.APP_CONFIG = {
   API_BASE: isLocal
     ? 'http://localhost:5000/api'
-    : 'https://YOUR-BACKEND-NAME.onrender.com/api'   // <-- you'll fill this in at Part 3
+    : 'https://cloudcare-api.onrender.com/api'   // <-- you'll fill this in at Part 3
 };
