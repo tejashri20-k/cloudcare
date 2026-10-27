@@ -72,16 +72,29 @@
       </div>
     </div>
 
-    <!-- 4. Medical Records Table -->
+        <!-- 4. Medical Records -->
     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h3 style="margin: 0;">Diagnostic & Medical Records</h3>
+      <h3 style="margin: 0 0 1rem 0;">Diagnostic & Medical Records</h3>
+
+      <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+        <div style="font-weight: 500; margin-bottom: 0.6rem;">Upload a document</div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <select id="recType" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option>Medical History</option>
+            <option>Test Result</option>
+            <option>Prescription</option>
+            <option>Insurance</option>
+            <option>Other</option>
+          </select>
+          <input type="file" id="recFile" accept=".pdf,.png,.jpg,.jpeg">
+          <button type="button" id="recUploadBtn" onclick="uploadRecord()" class="btn btn-primary">Upload</button>
+        </div>
+        <div id="recMsg" style="display: none; border-radius: 6px; padding: 0.6rem; margin-top: 0.75rem; font-size: 0.9rem;"></div>
+        <div style="color: #64748b; font-size: 0.8rem; margin-top: 0.5rem;">PDF, PNG or JPG, up to 5 MB.</div>
       </div>
-      <div id="recordsContainer" style="overflow-x: auto;">
-        <!-- Dynamic Records Table -->
-      </div>
+
+      <div id="recordsContainer" style="overflow-x: auto;"></div>
     </div>
-  </div>
 
     <!-- Booking Modal -->
   <div id="bookingModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.5); z-index:1000; align-items:center; justify-content:center; padding:1rem;">
@@ -324,6 +337,19 @@
     }
 
     // 4. Fetch Patient's Medical Records
+       // 4. Medical records: list, upload, view
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function showRecMsg(text, isError = true) {
+      const box = document.getElementById('recMsg');
+      box.textContent = text;
+      box.style.display = 'block';
+      box.style.background = isError ? '#fee2e2' : '#dcfce7';
+      box.style.color = isError ? '#b91c1c' : '#166534';
+    }
+
     async function loadRecords() {
       const container = document.getElementById('recordsContainer');
       const statRecords = document.getElementById('statMedicalRecords');
@@ -333,20 +359,19 @@
         const res = await authFetch(`${API_BASE}/records/${currentUser.id}`);
         const records = await res.json();
 
-        if (statRecords) {
-          statRecords.textContent = (records && Array.isArray(records)) ? records.length : 0;
-        }
-
-        if (!records || records.length === 0) {
-          container.innerHTML = `
-            <div style="padding: 1.5rem; text-align: center; color: #94a3b8; background: #f8fafc; border-radius: 6px;">
-              No medical records or diagnostic reports on file.
-            </div>
-          `;
+        if (!res.ok) {
+          container.innerHTML = `<p style="color: #ef4444;">${esc(records.error || 'Could not load records.')}</p>`;
           return;
         }
 
-        let tableHtml = `
+        if (statRecords) statRecords.textContent = records.length;
+
+        if (records.length === 0) {
+          container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 1.5rem;">No medical records or diagnostic reports on file.</p>';
+          return;
+        }
+
+        let html = `
           <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
             <thead>
               <tr style="border-bottom: 2px solid #e2e8f0; color: #475569;">
@@ -354,26 +379,80 @@
                 <th style="padding: 8px;">File Name</th>
                 <th style="padding: 8px;">Uploaded By</th>
                 <th style="padding: 8px;">Date</th>
+                <th style="padding: 8px;">File</th>
               </tr>
             </thead>
-            <tbody>
-        `;
+            <tbody>`;
 
         records.forEach(rec => {
-          tableHtml += `
+          html += `
             <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px 8px;"><strong>${rec.document_type || 'General'}</strong></td>
-              <td style="padding: 10px 8px;">${rec.file_name}</td>
-              <td style="padding: 10px 8px;">${rec.uploaded_by || 'Staff'}</td>
+              <td style="padding: 10px 8px;"><strong>${esc(rec.document_type || 'General')}</strong></td>
+              <td style="padding: 10px 8px;">${esc(rec.file_name)}</td>
+              <td style="padding: 10px 8px;">${esc(rec.uploaded_by || 'Staff')}</td>
               <td style="padding: 10px 8px; color: #64748b;">${rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'N/A'}</td>
-            </tr>
-          `;
+              <td style="padding: 10px 8px;">${rec.file_path
+                ? `<button onclick="downloadRecord('${rec.id}')" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer;">View</button>`
+                : '<span style="color: #94a3b8;">No file</span>'}</td>
+            </tr>`;
         });
 
-        tableHtml += '</tbody></table>';
-        container.innerHTML = tableHtml;
+        html += '</tbody></table>';
+        container.innerHTML = html;
       } catch (err) {
         container.innerHTML = '<p style="color: #ef4444;">Could not load records from database.</p>';
+      }
+    }
+
+    async function uploadRecord() {
+      const fileInput = document.getElementById('recFile');
+      const file = fileInput.files[0];
+      const documentType = document.getElementById('recType').value;
+
+      if (!file) return showRecMsg('Please choose a file first.');
+      if (file.size > 5 * 1024 * 1024) return showRecMsg('File is too large. Maximum size is 5 MB.');
+
+      const form = new FormData();
+      form.append('documentType', documentType);
+      form.append('file', file);
+
+      const btn = document.getElementById('recUploadBtn');
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      try {
+        // No Content-Type header here: the browser sets it for file uploads
+        const res = await authFetch(`${API_BASE}/records/upload`, { method: 'POST', body: form });
+        const result = await res.json();
+
+        if (!res.ok) {
+          showRecMsg(result.error || 'Upload failed. Please try again.');
+          return;
+        }
+
+        showRecMsg('File uploaded successfully!', false);
+        fileInput.value = '';
+        await loadRecords();
+      } catch (err) {
+        showRecMsg('Could not reach the server. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+      }
+    }
+
+    async function downloadRecord(recordId) {
+      try {
+        const res = await authFetch(`${API_BASE}/records/file/${recordId}`);
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || 'Could not open the file.');
+          return;
+        }
+        const w = window.open(result.url, '_blank');
+        if (!w) window.location.href = result.url; // pop-up blocked
+      } catch (err) {
+        alert('Could not reach the server.');
       }
     }
 

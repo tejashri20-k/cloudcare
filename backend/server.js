@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -203,12 +204,60 @@ app.post('/api/auth/login', async (req, res) => {
 // PROTECTED ROUTES (login token required)
 // =====================================================
 
-// Medical records - a patient can only read their own
-app.get('/api/records/:patientId', requireAuth, requireRole('Patient'), async (req, res) => {
+// =====================================================
+// MEDICAL FILES (Supabase Storage)
+// =====================================================
+const BUCKET = 'medical-files';
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE }
+});
+
+// Wrapper so upload errors come back as JSON messages
+function uploadSingle(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? 'File is too large. Maximum size is 5 MB.'
+        : err.message;
+      return res.status(400).json({ error: msg });
+    }
+    next();
+  });
+}
+
+// Is this patient one of this doctor's patients? (has an appointment with them)
+async function doctorHasPatient(doctorUserId, patientId) {
+  const { data: doc } = await supabase
+    .from('doctors').select('id').eq('doctor_user_id', doctorUserId).maybeSingle();
+  const doctorId = doc ? doc.id : doctorUserId;
+
+  const { data } = await supabase
+    .from('appointments')
+    .select('id')
+    .eq('doctor_id', doctorId)
+    .eq('patient_id', patientId)
+    .limit(1);
+
+  return !!(data && data.length > 0);
+}
+
+// List a patient's records - the patient themself, or one of their doctors
+app.get('/api/records/:patientId', requireAuth, async (req, res) => {
   const { patientId } = req.params;
 
-  if (patientId !== req.user.id) {
-    return res.status(403).json({ error: 'You can only view your own records.' });
+  let allowed = false;
+  if (req.user.role === 'Patient') {
+    allowed = patientId === req.user.id;
+  } else if (req.user.role === 'Doctor') {
+    allowed = await doctorHasPatient(req.user.id, patientId);
+  }
+
+  if (!allowed) {
+    return res.status(403).json({ error: 'You do not have access to these records.' });
   }
 
   const { data, error } = await supabase
@@ -219,6 +268,92 @@ app.get('/api/records/:patientId', requireAuth, requireRole('Patient'), async (r
 
   if (error) return res.status(500).json({ error: error.message });
   res.json(data || []);
+});
+
+// Upload a file - patients for themselves, doctors for their own patients
+app.post('/api/records/upload', requireAuth, requireRole('Patient', 'Doctor'), uploadSingle, async (req, res) => {
+  const file = req.file;
+  const documentType = (req.body.documentType || 'General').trim().slice(0, 50);
+
+  if (!file) return res.status(400).json({ error: 'Please choose a file to upload.' });
+  if (!ALLOWED_TYPES.includes(file.mimetype)) {
+    return res.status(400).json({ error: 'Only PDF, PNG and JPG files are allowed.' });
+  }
+
+  let patientId;
+  if (req.user.role === 'Patient') {
+    patientId = req.user.id; // always themselves
+  } else {
+    patientId = req.body.patientId;
+    if (!patientId) return res.status(400).json({ error: 'Please choose a patient.' });
+    if (!(await doctorHasPatient(req.user.id, patientId))) {
+      return res.status(403).json({ error: 'You can only upload records for your own patients.' });
+    }
+  }
+
+  try {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${patientId}/${Date.now()}-${safeName}`;
+
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, file.buffer, { contentType: file.mimetype });
+    if (upErr) return res.status(500).json({ error: 'Upload failed: ' + upErr.message });
+
+    const { data, error } = await supabase
+      .from('medical_records')
+      .insert([{
+        patient_id: patientId,
+        document_type: documentType,
+        file_name: file.originalname,
+        file_path: path,
+        uploaded_by: `${req.user.name} (${req.user.role})`
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      await supabase.storage.from(BUCKET).remove([path]); // don't leave an orphan file
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(201).json({ message: 'File uploaded successfully!', record: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get a temporary (60 second) link to open a file
+app.get('/api/records/file/:recordId', requireAuth, async (req, res) => {
+  try {
+    const { data: record, error } = await supabase
+      .from('medical_records')
+      .select('*')
+      .eq('id', req.params.recordId)
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!record || !record.file_path) {
+      return res.status(404).json({ error: 'No file is attached to this record.' });
+    }
+
+    let allowed = false;
+    if (req.user.role === 'Patient') {
+      allowed = record.patient_id === req.user.id;
+    } else if (req.user.role === 'Doctor') {
+      allowed = await doctorHasPatient(req.user.id, record.patient_id);
+    }
+    if (!allowed) return res.status(403).json({ error: 'You do not have access to this file.' });
+
+    const { data, error: urlErr } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(record.file_path, 60);
+
+    if (urlErr) return res.status(500).json({ error: urlErr.message });
+    res.json({ url: data.signedUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Appointments - patients, doctors and clinics each get only their own

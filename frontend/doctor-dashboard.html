@@ -63,6 +63,34 @@
         </table>
       </div>
     </div>
+    <!-- 3. Patient Records -->
+    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; margin-top: 2rem;">
+      <h3 style="margin: 0 0 0.25rem 0;">Patient Records</h3>
+      <p style="color: #64748b; margin: 0 0 1rem 0; font-size: 0.9rem;">Choose one of your patients to view their documents or upload a prescription or test result.</p>
+
+      <select id="recPatient" onchange="loadPatientRecords()" style="width: 100%; max-width: 360px; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 1rem;">
+        <option value="">Select a patient...</option>
+      </select>
+
+      <div id="doctorUploadBox" style="display: none; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+        <div style="font-weight: 500; margin-bottom: 0.6rem;">Upload a document for this patient</div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+          <select id="recType" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px;">
+            <option>Prescription</option>
+            <option>Test Result</option>
+            <option>Lab Report</option>
+            <option>Clinical Notes</option>
+            <option>Other</option>
+          </select>
+          <input type="file" id="recFile" accept=".pdf,.png,.jpg,.jpeg">
+          <button type="button" id="recUploadBtn" onclick="uploadRecord()" class="btn btn-primary">Upload</button>
+        </div>
+        <div id="recMsg" style="display: none; border-radius: 6px; padding: 0.6rem; margin-top: 0.75rem; font-size: 0.9rem;"></div>
+        <div style="color: #64748b; font-size: 0.8rem; margin-top: 0.5rem;">PDF, PNG or JPG, up to 5 MB.</div>
+      </div>
+
+      <div id="doctorRecordsContainer" style="overflow-x: auto;"></div>
+    </div>
   </div>
 
   <script src="config.js"></script>
@@ -96,6 +124,159 @@
     const statSpecialty = document.getElementById('statSpecialty');
     if (statSpecialty && currentDoctor.specialty) {
       statSpecialty.textContent = currentDoctor.specialty;
+    }
+
+        // ---------- PATIENT RECORDS ----------
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function showRecMsg(text, isError = true) {
+      const box = document.getElementById('recMsg');
+      box.textContent = text;
+      box.style.display = 'block';
+      box.style.background = isError ? '#fee2e2' : '#dcfce7';
+      box.style.color = isError ? '#b91c1c' : '#166534';
+    }
+
+    // Fill the patient dropdown from this doctor's appointments
+    async function loadPatientOptions() {
+      const select = document.getElementById('recPatient');
+      const previous = select.value;
+
+      try {
+        const res = await authFetch(`${API_BASE}/appointments/${currentDoctor.id}`);
+        const appointments = await res.json();
+
+        const patients = new Map();
+        (Array.isArray(appointments) ? appointments : []).forEach(a => {
+          if (a.patient_id && !patients.has(a.patient_id)) {
+            patients.set(a.patient_id, a.patientName || 'Patient');
+          }
+        });
+
+        select.innerHTML = '<option value="">Select a patient...</option>' +
+          [...patients].map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+
+        if (previous && patients.has(previous)) select.value = previous;
+      } catch (err) {
+        console.error('Could not load patients:', err);
+      }
+    }
+
+    async function loadPatientRecords() {
+      const patientId = document.getElementById('recPatient').value;
+      const box = document.getElementById('doctorUploadBox');
+      const container = document.getElementById('doctorRecordsContainer');
+
+      if (!patientId) {
+        box.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+
+      box.style.display = 'block';
+      container.innerHTML = '<p style="color: #64748b;">Loading records...</p>';
+
+      try {
+        const res = await authFetch(`${API_BASE}/records/${patientId}`);
+        const records = await res.json();
+
+        if (!res.ok) {
+          container.innerHTML = `<p style="color: #ef4444;">${esc(records.error || 'Could not load records.')}</p>`;
+          return;
+        }
+
+        if (records.length === 0) {
+          container.innerHTML = '<p style="color: #94a3b8; text-align: center; padding: 1.5rem;">No documents on file for this patient.</p>';
+          return;
+        }
+
+        let html = `
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+            <thead>
+              <tr style="border-bottom: 2px solid #e2e8f0; color: #475569;">
+                <th style="padding: 8px;">Document Type</th>
+                <th style="padding: 8px;">File Name</th>
+                <th style="padding: 8px;">Uploaded By</th>
+                <th style="padding: 8px;">Date</th>
+                <th style="padding: 8px;">File</th>
+              </tr>
+            </thead>
+            <tbody>`;
+
+        records.forEach(rec => {
+          html += `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 8px;"><strong>${esc(rec.document_type || 'General')}</strong></td>
+              <td style="padding: 10px 8px;">${esc(rec.file_name)}</td>
+              <td style="padding: 10px 8px;">${esc(rec.uploaded_by || 'Staff')}</td>
+              <td style="padding: 10px 8px; color: #64748b;">${rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'N/A'}</td>
+              <td style="padding: 10px 8px;">${rec.file_path
+                ? `<button onclick="downloadRecord('${rec.id}')" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer;">View</button>`
+                : '<span style="color: #94a3b8;">No file</span>'}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = '<p style="color: #ef4444;">Could not load records from database.</p>';
+      }
+    }
+
+    async function uploadRecord() {
+      const patientId = document.getElementById('recPatient').value;
+      const fileInput = document.getElementById('recFile');
+      const file = fileInput.files[0];
+      const documentType = document.getElementById('recType').value;
+
+      if (!patientId) return showRecMsg('Please choose a patient first.');
+      if (!file) return showRecMsg('Please choose a file first.');
+      if (file.size > 5 * 1024 * 1024) return showRecMsg('File is too large. Maximum size is 5 MB.');
+
+      const form = new FormData();
+      form.append('patientId', patientId);
+      form.append('documentType', documentType);
+      form.append('file', file);
+
+      const btn = document.getElementById('recUploadBtn');
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      try {
+        const res = await authFetch(`${API_BASE}/records/upload`, { method: 'POST', body: form });
+        const result = await res.json();
+
+        if (!res.ok) {
+          showRecMsg(result.error || 'Upload failed. Please try again.');
+          return;
+        }
+
+        showRecMsg('File uploaded successfully!', false);
+        fileInput.value = '';
+        await loadPatientRecords();
+      } catch (err) {
+        showRecMsg('Could not reach the server. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+      }
+    }
+
+    async function downloadRecord(recordId) {
+      try {
+        const res = await authFetch(`${API_BASE}/records/file/${recordId}`);
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || 'Could not open the file.');
+          return;
+        }
+        const w = window.open(result.url, '_blank');
+        if (!w) window.location.href = result.url;
+      } catch (err) {
+        alert('Could not reach the server.');
+      }
     }
 
     function handleLogout() {
@@ -196,7 +377,10 @@
     }
 
     // Load schedule on page load
-    document.addEventListener('DOMContentLoaded', loadDoctorSchedule);
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDoctorSchedule();
+      loadPatientOptions();
+    });
   </script>
 </body>
 </html>
