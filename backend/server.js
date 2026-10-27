@@ -314,7 +314,7 @@ app.post('/api/records/upload', requireAuth, requireRole('Patient', 'Doctor'), u
         file_name: file.originalname,
         file_path: path,
         storage_path: path,
-        uploaded_by: `${req.user.name} (${req.user.role})`
+        uploaded_by: req.user.role
       }])
       .select()
       .single();
