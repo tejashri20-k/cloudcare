@@ -86,8 +86,14 @@ app.post('/api/auth/register', async (req, res) => {
     dateOfBirth, 
     gender, 
     address, 
-    city 
+    city,
+    specialty
   } = req.body;
+
+  // A doctor must choose a specialty
+  if (role === 'Doctor' && !specialty) {
+    return res.status(400).json({ error: 'Please select your medical specialty.' });
+  }
 
   try {
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -107,8 +113,8 @@ app.post('/api/auth/register', async (req, res) => {
           email: email,
           role: role,
           phone: phone || null,
-          date_of_birth: dateOfBirth || null,
-          gender: gender || null,
+          date_of_birth: role === 'Clinic' ? null : (dateOfBirth || null),
+          gender: role === 'Clinic' ? null : (gender || null),
           city: city || null,
           address: address || null
         }
@@ -122,7 +128,7 @@ app.post('/api/auth/register', async (req, res) => {
       ]);
     } else if (role === 'Doctor') {
       await supabase.from('doctors').insert([
-        { doctor_user_id: userId, name: fullName, specialty: 'General Medicine' }
+        { doctor_user_id: userId, name: fullName, specialty: specialty }
       ]);
     }
 

@@ -27,6 +27,25 @@
         </select>
       </div>
 
+      <div class="form-group" id="specialtyGroup" style="display: none;">
+        <label for="regSpecialty">Medical Specialty</label>
+        <select id="regSpecialty">
+          <option value="">Select your specialty</option>
+          <option value="General Medicine">General Medicine</option>
+          <option value="Cardiology">Cardiology</option>
+          <option value="Dermatology">Dermatology</option>
+          <option value="Dentistry">Dentistry</option>
+          <option value="ENT">ENT</option>
+          <option value="Gynecology">Gynecology</option>
+          <option value="Neurology">Neurology</option>
+          <option value="Oncology">Oncology</option>
+          <option value="Ophthalmology">Ophthalmology</option>
+          <option value="Orthopedics">Orthopedics</option>
+          <option value="Pediatrics">Pediatrics</option>
+          <option value="Psychiatry">Psychiatry</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label for="regName">Full Name / Clinic Name</label>
         <input type="text" id="regName" placeholder="Enter full name" required>
@@ -47,19 +66,21 @@
         <input type="tel" id="regPhone" placeholder="Enter phone number" required>
       </div>
 
-      <div class="form-group">
-        <label for="regDob">Date of Birth</label>
-        <input type="date" id="regDob">
-      </div>
+      <div id="dobGenderFields">
+        <div class="form-group">
+          <label for="regDob">Date of Birth</label>
+          <input type="date" id="regDob">
+        </div>
 
-      <div class="form-group">
-        <label for="regGender">Gender</label>
-        <select id="regGender">
-          <option value="">Select Gender</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-          <option value="Other">Other</option>
-        </select>
+        <div class="form-group">
+          <label for="regGender">Gender</label>
+          <select id="regGender">
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
       </div>
 
       <div class="form-group">
@@ -81,19 +102,45 @@
   </div>
   <script src="config.js"></script>
   <script>
+    const roleSelect = document.getElementById('regRole');
+    const dobGenderFields = document.getElementById('dobGenderFields');
+    const specialtyGroup = document.getElementById('specialtyGroup');
+    const specialtySelect = document.getElementById('regSpecialty');
+
+    function updateRoleFields() {
+      const role = roleSelect.value;
+
+      // Clinics don't need date of birth or gender
+      dobGenderFields.style.display = role === 'Clinic' ? 'none' : 'block';
+      if (role === 'Clinic') {
+        document.getElementById('regDob').value = '';
+        document.getElementById('regGender').value = '';
+      }
+
+      // Only doctors choose a specialty
+      specialtyGroup.style.display = role === 'Doctor' ? 'block' : 'none';
+      specialtySelect.required = role === 'Doctor';
+      if (role !== 'Doctor') specialtySelect.value = '';
+    }
+
+    roleSelect.addEventListener('change', updateRoleFields);
+    updateRoleFields();
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
       e.preventDefault();
+
+            const role = document.getElementById('regRole').value;
 
       const userData = {
         fullName: document.getElementById('regName').value.trim(),
         email: document.getElementById('regEmail').value.trim(),
         password: document.getElementById('regPassword').value,
         phone: document.getElementById('regPhone').value.trim(),
-        dateOfBirth: document.getElementById('regDob').value || null,
-        gender: document.getElementById('regGender').value || null,
+        dateOfBirth: role === 'Clinic' ? null : (document.getElementById('regDob').value || null),
+        gender: role === 'Clinic' ? null : (document.getElementById('regGender').value || null),
         city: document.getElementById('regCity').value.trim(),
         address: document.getElementById('regAddress').value.trim() || null,
-        role: document.getElementById('regRole').value
+        specialty: role === 'Doctor' ? document.getElementById('regSpecialty').value : null,
+        role: role
       };
 
       try {
